@@ -1,0 +1,84 @@
+---
+title: "R and Python Version Usage Audit Report"
+output: 
+  html_document:
+    theme: spacelab
+rmd_output_metadata:
+  rsc_output_files:
+    - "rsc-basic-audit.csv"
+---
+
+## Which versions of R and Python are in use on your RStudio Connect server?
+
+To pull a complete list of the content items on your Connect server, you must use an API key generated from an Admin account. Publisher account API keys will only return content items which the publisher user has been given access to view or edit.
+
+Requirements:
+
+- [Administrator API Key](https://docs.rstudio.com/connect/user/api-keys/#api-keys-creating){target="_blank"}
+- RStudio Connect server URL
+
+```{r include=FALSE}
+library(httr)
+library(tidyr)
+library(dplyr)
+
+# Use the /v1/content endpoint to retrieve the full list of content items
+result <- GET(
+  paste0(Sys.getenv("CONNECT_SERVER"),"__api__/v1/content"),
+    add_headers(Authorization = paste("Key", Sys.getenv("CONNECT_API_KEY"))))
+
+# Create a tibble for the content list result response
+df_full <- unnest_wider(tibble::tibble(dat = content(result)), dat) 
+```
+
+---
+
+## R Content
+
+RStudio Connect supports running multiple versions of R. We strongly recommend supporting multiple versions of R instead of upgrading and maintaining a single version of R. A system supporting multiple versions of R is the best way to ensure that your R content will continue to run. As new versions of R are released, install the new version of R alongside previous releases.
+
+**Install R using the directions at** [https://docs.rstudio.com/resources/install-r/](https://docs.rstudio.com/resources/install-r/){target="_blank"}
+
+```{r r-plot, echo=FALSE}
+library(ggplot2)
+
+# Calculate content counts by R version
+r_content <- df_full %>%
+  filter(!is.na(r_version)) %>%
+  count(r_version) %>%
+  arrange(desc(r_version))
+
+# Bar plot of content items on the server by R version in use 
+ggplot(r_content, aes(y = r_version, x = n)) +
+  geom_bar(stat = "identity") + 
+  theme_minimal() + 
+  labs(title = "Number of Content Items by R Version in Use",
+       x = "Content Count",
+       y = "R Version")+
+  theme(plot.title.position = "plot")
+```
+
+## Python Content
+
+RStudio Connect supports running multiple versions of Python. In most cases, upgrading Python should consist of building the new version of Python and retaining the previous version. We strongly recommend supporting multiple versions of Python instead of upgrading and maintaining a single version of Python. Supporting multiple versions of Python is the best way to ensure applications or reports published with specific package dependencies will continue to run.
+
+**Install Python using the directions at** [https://docs.rstudio.com/resources/install-python/](https://docs.rstudio.com/resources/install-python/){target="_blank"}
+
+```{r py-plot, echo=FALSE}
+library(ggplot2)
+
+# Calculate content counts by Python version
+py_content <- df_full %>%
+  filter(!is.na(py_version)) %>%
+  count(py_version) %>%
+  arrange(desc(py_version))
+
+# Bar plot of content items on the server by python version in use 
+ggplot(py_content, aes(y = py_version, x = n)) +
+  geom_bar(stat = "identity") + 
+  theme_minimal() + 
+  labs(title = "Number of Content Items by Python Version in Use",
+       x = "Content Count",
+       y = "Python")+
+  theme(plot.title.position = "plot")
+```
