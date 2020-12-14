@@ -1,0 +1,92 @@
+---
+title: "Unpublished Content Audit"
+output: 
+  html_document:
+    theme: united
+rmd_output_metadata:
+  rsc_output_files:
+    - "all-unpublished-audit.csv"
+    - "old-unpublished-audit.csv"
+---
+
+## List any unpublished content items on the RStudio Connect server
+
+To pull a complete list of the content items on your Connect server, you must use an API key generated from an Admin account. Publisher account API keys will only return content items which the publisher user has been given access to view or edit.
+
+Requirements:
+
+- [Administrator API Key](https://docs.rstudio.com/connect/user/api-keys/#api-keys-creating){target="_blank"}
+- RStudio Connect server URL
+
+```{r content-list, include=FALSE}
+library(httr)
+library(tidyr)
+library(dplyr)
+
+# Use the /v1/content endpoint to retrieve the full list of content items
+result <- GET(
+  paste0(Sys.getenv("CONNECT_SERVER"),"__api__/v1/content"),
+    add_headers(Authorization = paste("Key", Sys.getenv("CONNECT_API_KEY"))))
+
+# Create a tibble for the content list result response
+# Filter to show only content items with an 'unknown' app_mode 
+mode_unknown <- unnest_wider(tibble::tibble(dat = content(result)), dat) %>%
+  filter(app_mode == 'unknown')
+```
+
+### This server has `r nrow(mode_unknown)` content items with an unknown `app_mode` type
+
+This report runs an audit of content items on your RStudio Connect server with an "unknown" `app_mode`. A content item can end up in this state when it fails to deploy. Publishers will see the following messages:
+
+- This item is incomplete.
+- This item has not been fully deployed. Please try publishing again.
+- Check the Logs tab for errors if deployment fails.
+
+---
+
+```{r old-unknown, include=FALSE}
+library(lubridate)
+
+# Filter unknown app_mode tibble to show older (30d) content
+old_unknown <- mode_unknown %>% 
+  filter(created_time < today() - days(30))
+
+old_unknown
+```
+
+
+### `r nrow(old_unknown)` unknown `app_mode` items were last deployed over 30 days ago
+
+**Recommendation:** Content items that were last deployed over 30 days ago and remain unknown can likely be deleted. Check with the content owner to be sure, or let it be known that all unpublished content items older than one month are subject to a routine clean-up process. 
+
+### Unknown Content (older than 30 days)
+
+```{r echo=FALSE}
+library(reactable)
+
+# Select fields to display in a formatted table
+old_unknown %>%
+  select(name, title, dashboard_url, app_mode, created_time, last_deployed_time) %>%
+  reactable(searchable = TRUE, highlight = TRUE, columns = list(
+  name = colDef(name = "Name"),
+  title = colDef(name = "Title"),
+  dashboard_url = colDef(name = "Content URL", cell = function(value) {
+    htmltools::tags$a(href = value, target = "_blank", "Link")
+    }),
+  app_mode = colDef(name = "Type"),
+  created_time = colDef(name = "Created", format = colFormat(datetime = TRUE)),
+  last_deployed_time = colDef(name = "Last Deployed", format = colFormat(datetime = TRUE))
+))
+```
+
+## Download the audit report data
+
+```{r include=FALSE}
+
+# Write the audit response reports out to a CSV file for download
+write.csv(mode_unknown, "all-unpublished-audit.csv", row.names=FALSE)
+write.csv(old_unknown, "old-unpublished-audit.csv", row.names=FALSE)
+```
+
+- All Unknown Content: [all-unpublished-audit.csv](all-unpublished-audit.csv)
+- Unknown Content Older than 30d: [old-unpublished-audit.csv](old-unpublished-audit.csv)
