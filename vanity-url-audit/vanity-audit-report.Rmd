@@ -1,0 +1,59 @@
+---
+title: "Vanity URL Audit Report"
+output: 
+  html_document:
+    theme: flatly
+rmd_output_metadata:
+  rsc_output_files:
+    - "vanity-url-audit.csv"
+---
+
+## List all defined vanity URLs on the RStudio Connect server
+
+You must have administrator privileges to perform run this report.
+
+[Requirements](https://docs.rstudio.com/connect/cookbook/#getting-started){target="_blank"}:
+
+- [Administrator API Key](https://docs.rstudio.com/connect/user/api-keys/#api-keys-creating){target="_blank"} environment variable: `CONNECT_API_KEY`
+- RStudio Connect server URL environment variable: `CONNECT_SERVER`
+
+```{r content-list, include=FALSE}
+library(httr)
+library(tidyr)
+
+# Use the /v1/vanities endpoint to list all vanity URLs
+result <- GET(
+  paste0(Sys.getenv("CONNECT_SERVER"),"__api__/v1/vanities"),
+    add_headers(Authorization = paste("Key", Sys.getenv("CONNECT_API_KEY"))))
+
+# Create a tibble for the vanity list result response
+vanities <- unnest_wider(tibble::tibble(dat = content(result)), dat) 
+
+vanities
+```
+
+### Download the full report contents
+
+```{r include=FALSE}
+
+# Write the full vanity URL list reponse out to a CSV file for download
+write.csv(vanities, "vanity-url-audit.csv", row.names=FALSE)
+```
+
+- Report Data: [vanity-url-audit.csv](vanity-url-audit.csv)
+
+---
+
+### This server has `r nrow(vanities)` content items with assigned vanity URLs
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(reactable)
+
+# Use reactable to create a nicely formatted table
+reactable(vanities, searchable = TRUE, highlight = TRUE, columns = list(
+  content_guid = colDef(name = "Content GUID"),
+  path = colDef(name = "Path"),
+  created_time = colDef(name = "Created", format = colFormat(datetime = TRUE))
+))
+```
