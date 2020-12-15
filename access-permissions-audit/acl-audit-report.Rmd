@@ -1,0 +1,154 @@
+---
+title: "Content Access/Permissions Audit Report"
+output: 
+  html_document:
+    theme: lumen
+rmd_output_metadata:
+  rsc_output_files:
+    - "acl-detail-audit.csv"
+---
+
+`r if(Sys.getenv('CONNECT_SERVER') == '') { "<h4>ERROR: You must set the CONNECT_SERVER environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '') { "<h4>ERROR: You must set the CONNECT_API_KEY environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '' || Sys.getenv('CONNECT_SERVER') == '') { knitr::knit_exit() }`
+
+**Generate a detailed list of all content items that have been shared with specific users or groups on RStudio Connect.** 
+
+This report assumes you have already created Pins for the result of an administrator call to `/v1/content` (content enumeration), `/v1/users`, and `/v1/groups`.
+
+## Get the Content List Pin
+
+```{r echo=FALSE}
+#
+# ** BEFORE EXECUTING **
+# - REPLACE PIN NAME 
+# - REPLACE SERVER URL
+#
+
+# Register RStudio Connect
+library(pins)
+board_register("rsconnect", server = "YOUR-SERVER-URL")
+
+# Retrieve Pin
+content <- pin_get(name = "YOUR-PIN/content-info", board = "rsconnect")
+```
+
+Create a summary table of the number of content items under each access type.
+
+- **`acl`** Access Control List - Specific users or groups
+- **`logged_in`** All users - login required
+- **`all`** Anyone - no login required
+
+```{r access-summary, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(gt)
+
+df <- content %>%
+  select(guid, name, title, access_type, created_time, last_deployed_time, content_url, dashboard_url)
+
+df %>% count(access_type, sort = TRUE) %>%
+  gt() %>%
+  tab_header(
+    title = "Sharing Settings",
+    subtitle = "RStudio Connect Server Content Audit"
+  ) %>%
+  cols_label(
+    access_type = "Access Type",
+    n = "Count"
+  )
+```
+
+```{r include=FALSE}
+
+# Filter content list by 'acl' access_type
+acl_only <- df %>%
+  filter(access_type == 'acl')
+```
+
+
+## Permissions API
+
+```{r include=FALSE}
+library(httr)
+
+# Function for calling the content `/permissions` API endpoint
+get_permissions <- function(guid) {
+  permissions <- GET(paste0(Sys.getenv("CONNECT_SERVER"),"__api__/v1/content/",guid,"/permissions"),
+    add_headers(Authorization = paste("Key", Sys.getenv("CONNECT_API_KEY"))))
+  
+  tidyr::unnest_wider(tibble::tibble(dat = content(permissions)), dat)
+}
+
+# Get permissions for all ACL-type content items
+# Content that is accessible only by the publisher-owner (no additional users or groups) will return no records
+
+acl_info <- lapply(acl_only$guid, get_permissions)
+acl_tibble <- tidyr::unnest(tibble::tibble(dat = acl_info), dat)
+
+# Calculate the number of content items accessible by the publisher-owner plus additional users or groups
+acl_distinct <- acl_tibble %>% 
+  select(content_guid) %>%
+  n_distinct()
+```
+
+#### Content items accessible only by the publisher-owner (no additional users or groups): `r nrow(acl_only) - acl_distinct`
+
+#### Content items accessible by a list of specific users or groups: `r acl_distinct` 
+
+For each content item shared with additional specific users and groups, report the user/group and list whether they have viewer or collaborator access:
+
+```{r echo=FALSE}
+#
+# REPLACE PIN NAMES BEFORE EXECUTING
+# - user_list
+# - group_list
+#
+
+library(reactable)
+
+# Get the user info Pin
+user_list <- pin_get(name = "YOUR-PIN/user-info", board = "rsconnect")
+
+# Get the group info Pin
+group_list <- pin_get(name = "YOUR-PIN/group-info", board = "rsconnect")
+
+# Add user and group names to the permission info
+acl_detail <- acl_tibble %>% 
+  left_join(user_list, by=c("principal_guid" = "guid")) %>%
+  left_join(group_list, by=c("principal_guid" = "guid")) %>%
+  select(id, content_guid, principal_guid, principal_type, role, username, email, user_role, locked, name) %>%
+  rename(group_name = name)
+
+audit_table <- acl_detail %>%
+  left_join(content, by=c("content_guid" = "guid")) %>%
+  rename(content_name = name, 
+         content_title = title,
+         share_username = username,
+         share_email = email,
+         share_type = principal_type,
+         share_role = role,
+         share_group = group_name) %>%
+  select(content_guid, content_title, dashboard_url, share_role, share_type, share_username, share_group)
+
+reactable(audit_table, searchable = TRUE, highlight = TRUE, columns = list(
+    content_guid = colDef(name = "GUID"),
+    content_title = colDef(name = "Title"),
+    dashboard_url = colDef(name = "Content URL", cell = function(value) {
+    htmltools::tags$a(href = value, target = "_blank", "Link")
+    }),
+    share_role = colDef(name = "Access Type"),
+    share_type = colDef(name = "User/Group"),
+    share_username = colDef(name = "User Name"),
+    share_group = colDef(name = "Group Name")
+  ))
+```
+
+### Download the full report contents
+
+```{r include=FALSE}
+
+# Write the audit_table response out to a CSV file for download
+write.csv(audit_table, "acl-detail-audit.csv", row.names=FALSE)
+```
+
+- Report: [acl-detail-audit.csv](acl-detail-audit.csv)
