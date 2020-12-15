@@ -3,6 +3,10 @@ title: "Pin User & Group GUIDs for Audit Report"
 output: html_document
 ---
 
+`r if(Sys.getenv('CONNECT_SERVER') == '') { "<h4>ERROR: You must set the CONNECT_SERVER environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '') { "<h4>ERROR: You must set the CONNECT_API_KEY environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '' || Sys.getenv('CONNECT_SERVER') == '') { knitr::knit_exit() }`
+
 ## Pin User Information to RStudio Connect
 
 List local users with the `GET /v1/users` endpoint. This endpoint uses offset pagination (using page numbers). Results are sorted by first name, then last name, then username, then email. When called with a prefix parameter (not used in this example), it searches for local users matching the prefix.

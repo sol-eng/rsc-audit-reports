@@ -8,6 +8,10 @@ rmd_output_metadata:
     - "vanity-url-audit.csv"
 ---
 
+`r if(Sys.getenv('CONNECT_SERVER') == '') { "<h4>ERROR: You must set the CONNECT_SERVER environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '') { "<h4>ERROR: You must set the CONNECT_API_KEY environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '' || Sys.getenv('CONNECT_SERVER') == '') { knitr::knit_exit() }`
+
 ## List all defined vanity URLs on the RStudio Connect server
 
 You must have administrator privileges to perform run this report.

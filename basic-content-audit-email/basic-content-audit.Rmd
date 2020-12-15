@@ -8,6 +8,10 @@ rmd_output_metadata:
     - "rsc-basic-audit.csv"
 ---
 
+`r if(Sys.getenv('CONNECT_SERVER') == '') { "<h4>ERROR: You must set the CONNECT_SERVER environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '') { "<h4>ERROR: You must set the CONNECT_API_KEY environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '' || Sys.getenv('CONNECT_SERVER') == '') { knitr::knit_exit() }`
+
 ## List all content items on the RStudio Connect server and send a custom email update
 
 To pull a complete list of the content items on your Connect server, you must use an API key generated from an Admin account. Publisher account API keys will only return content items which the publisher user has been given access to view or edit.
