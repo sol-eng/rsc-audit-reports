@@ -1,0 +1,108 @@
+---
+title: "Tag Usage Audit Report"
+output: 
+  html_document:
+    theme: flatly
+rmd_output_metadata:
+  rsc_output_files:
+    - "tag-list-audit.csv"
+    - "tagged-content-audit.csv"
+---
+
+`r if(Sys.getenv('CONNECT_SERVER') == '') { "<h4>ERROR: You must set the CONNECT_SERVER environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '') { "<h4>ERROR: You must set the CONNECT_API_KEY environment variable</h4>\n" }`
+`r if(Sys.getenv('CONNECT_API_KEY') == '' || Sys.getenv('CONNECT_SERVER') == '') { knitr::knit_exit() }`
+
+## List all the Tags on your RStudio Connect server & All tagged content
+
+Authenticated access from an RStudio Connect user is required for `GET /v1/tags`.
+
+[Requirements](https://docs.rstudio.com/connect/cookbook/#getting-started){target="_blank"}:
+
+- [RStudio Connect API Key](https://docs.rstudio.com/connect/user/api-keys/#api-keys-creating){target="_blank"} environment variable: `CONNECT_API_KEY`
+- RStudio Connect server URL environment variable: `CONNECT_SERVER`
+
+```{r content-list, include=FALSE}
+library(httr)
+library(tidyr)
+library(dplyr)
+
+# Use the /v1/vanities endpoint to list all vanity URLs
+result <- GET(
+  paste0(Sys.getenv("CONNECT_SERVER"),"__api__/v1/tags"),
+    add_headers(Authorization = paste("Key", Sys.getenv("CONNECT_API_KEY"))))
+
+# Create a tibble for the tag list result response
+tags <- unnest_wider(tibble::tibble(dat = content(result)), dat) 
+
+# Filter the tibble to show just the parent tags
+parent_tags <- tags %>%
+  filter(is.na(parent_id))
+```
+
+### This RStudio Connect server has `r nrow(tags)` tags available in `r nrow(parent_tags)` tag categories
+
+## List content for tags
+
+Use the `GET /v1/tags/{id}/content` API endpoint to list all the content for a specified tag (id). 
+_Note: Authenticated access from a user is required. If an "administrator" role is used, then all content items will be returned regardless of the visibility to the requesting user._
+
+```{r include=FALSE}
+# Get content items in each tag
+
+# Function for calling the `GET /v1/tags/{id}/content` API endpoint
+get_content <- function(id) {
+  content_list <- GET(paste0(Sys.getenv("CONNECT_SERVER"),"__api__/v1/tags/",id,"/content"),
+    add_headers(Authorization = paste("Key", Sys.getenv("CONNECT_API_KEY"))))
+  
+  tidyr::unnest_wider(tibble::tibble(dat = content(content_list)), dat) %>% 
+    mutate(tag_id = {{id}})
+}
+
+tag_content <- lapply(tags$id, get_content)
+tc_tibble <- tidyr::unnest(tibble::tibble(dat = tag_content), dat)
+
+# Prepare a full list of tagged content items
+# Join with the tags tibble
+
+tags_tibble <- tags %>%
+  rename(tag_id = id, tag_name = name, tag_parent = parent_id) %>%
+  select(tag_id, tag_name, tag_parent)
+
+tagged_content <- tc_tibble %>%
+  left_join(tags_tibble)
+```
+
+### Download the full report contents
+
+```{r include=FALSE}
+
+# Write the full tag list reponse out to a CSV file for download
+write.csv(tags, "tag-list-audit.csv", row.names=FALSE)
+
+# Write the tagged content items out to a CSV file for download
+write.csv(tagged_content, "tagged-content-audit.csv", row.names=FALSE)
+```
+
+- Tag List: [tag-list-audit.csv](tag-list-audit.csv)
+- Tagged Content: [tagged-content-audit.csv](tagged-content-audit.csv)
+
+---
+
+### This RStudio Connect server has `r nrow(tags)` tags available
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+# Bar plot showing the Top 12 Content Tags
+tagged_content %>% 
+  count(tag_name, sort = TRUE) %>%
+  top_n(12) %>%
+  ggplot(aes(y = reorder(tag_name, n), x = n)) +
+  geom_bar(stat = "identity") + 
+  theme_minimal() + 
+  labs(title = "Top 12 Content Tags",
+       x = "Content Count",
+       y = "Tag Name")+
+  theme(plot.title.position = "plot")
+```
