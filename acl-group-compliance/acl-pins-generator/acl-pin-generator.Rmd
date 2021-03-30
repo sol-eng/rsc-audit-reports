@@ -109,13 +109,20 @@ get_permissions <- function(guid) {
 acl_info <- purrr::map(acl_only$guid, get_permissions)
 acl_tibble <- tidyr::unnest(tibble::tibble(dat = acl_info), dat)
 
+# Join acl_tibble with acl_only
+acl_result <- acl_tibble %>%
+  left_join(acl_only, by=c("content_guid" = "guid")) %>%
+  rename(content_owner = owner_guid)
+
 # View the table result
 library(reactable)
 
-acl_tibble %>%
-  select(-id) %>%
+acl_result %>%
+  select(content_guid, principal_guid, principal_type, role, name, content_owner) %>%
   reactable(searchable = TRUE, highlight = TRUE, columns=list(
   content_guid = colDef(name = "Content GUID"),
+  name = colDef(name = "Content Name"),
+  content_owner = colDef(name = "Content Owner"),
   principal_guid = colDef(name = "Principal GUID"),
   principal_type = colDef(name = "Principal Type"),
   role = colDef(name = "Share Access Role")
@@ -137,12 +144,12 @@ user_list <- pin_get(name = Sys.getenv("USER_INFO_PIN"), board = "rsconnect")
 group_list <- pin_get(name = Sys.getenv("GROUP_INFO_PIN"), board = "rsconnect")
 
 # Add user names to the permission info
-pr_users <- acl_tibble %>% 
+pr_users <- acl_result %>% 
   filter(principal_type == 'user') %>%
   left_join(user_list, by=c("principal_guid" = "guid"))
 
 # Add group names to the permission info
-pr_groups <- acl_tibble %>%
+pr_groups <- acl_result %>%
   filter(principal_type == 'group') %>%
   left_join(group_list, by=c("principal_guid" = "guid"))
 ```
@@ -161,7 +168,7 @@ pins::pin(pr_groups, name = "acl-groups-table", description = "Results pulled fr
 ```{r include=FALSE}
 
 # Write the content permissions result table response out to a CSV file for download
-write.csv(acl_tibble, "rsc-acl-permissions.csv", row.names=FALSE)
+write.csv(acl_result, "rsc-acl-permissions.csv", row.names=FALSE)
 ```
 
 - Report: [Download CSV](rsc-acl-permissions.csv)
