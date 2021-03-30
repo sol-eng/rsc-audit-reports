@@ -1,6 +1,8 @@
 # rsc-audit-reports
 Content Audit Reports built using the RStudio Connect Server API (1.8.6+)
 
+![](diagrams/Basic-RSC-Audit-Platform.png)
+
 ### Pins
 
 - **Users & Groups** Create (2) Pins, one for User list information `/v1/users` and one for Group list information `/v1/groups`, to be used in downstream audit reports
