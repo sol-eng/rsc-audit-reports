@@ -58,7 +58,7 @@ all_content %>%
 
 ## Example Audit Reports {.tabset}
 
-### Admin Reports
+### Basic Admin Reports
 
 **Use the report templates to answer questions like...**
 
@@ -76,6 +76,21 @@ all_content %>%
     owner_username == 'kelly.obriant',
     app_mode == 'rmd-static',
     stringr::str_detect(title, pattern = 'audit')
+  ) %>%
+  arrange(desc(created_time)) %>%
+  rscpages()
+```
+
+### Complex Admin Reports
+
+**Examples of Admin Audit Reports that involve their own Pins and Pin Generators...**
+
+```{r}
+all_content %>%
+  filter(
+    owner_username == 'kelly.obriant',
+    app_mode == 'rmd-static',
+    stringr::str_detect(title, pattern = 'complex-audit')
   ) %>%
   arrange(desc(created_time)) %>%
   rscpages()
